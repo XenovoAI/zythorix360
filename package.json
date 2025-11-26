@@ -1,0 +1,37 @@
+{
+  "name": "zythorix360",
+  "version": "1.0.0",
+  "description": "NEET & JEE Preparation Platform - Zythorix360",
+  "homepage": "https://www.zythorix360.com",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "@supabase/supabase-js": "^2.75.0",
+    "@supabase/ssr": "^0.7.0",
+    "razorpay": "^2.9.6",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "tailwindcss": "^3.4.1",
+    "sonner": "^2.0.5",
+    "lucide-react": "^0.516.0",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-slot": "^1.0.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss-animate": "^1.0.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.3",
+    "postcss": "^8",
+    "autoprefixer": "^10.0.1"
+  }
+}
