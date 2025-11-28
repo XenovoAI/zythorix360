@@ -43,16 +43,72 @@ export default function Home() {
     }
   }
 
+  const handlePurchase = async (material) => {
+    if (!user) {
+      setPendingAction({ type: 'purchase', material })
+      setShowAuthModal(true)
+      return
+    }
+
+    toast.info('Payment integration coming soon! This material will be ₹' + material.price)
+    // TODO: Integrate Razorpay payment
+  }
+
   const handleDownload = async (material) => {
     if (!user) {
       setPendingAction({ type: 'download', material })
       setShowAuthModal(true)
       return
     }
+
+    // Check if material needs to be purchased
+    if (!material.is_free) {
+      const { data: purchase } = await supabase
+        .from('purchases')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('material_id', material.id)
+        .single()
+
+      if (!purchase) {
+        handlePurchase(material)
+        return
+      }
+    }
+    
     try {
+      // Track download
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const response = await fetch('/api/materials/download', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            materialId: material.id,
+            userId: user.id
+          })
+        })
+
+        const result = await response.json()
+        if (response.ok && result.isNewDownload) {
+          // Update local state with new download count
+          setFeaturedMaterials(prev => 
+            prev.map(m => m.id === material.id 
+              ? { ...m, downloads: result.downloadCount }
+              : m
+            )
+          )
+        }
+      }
+
+      // Open PDF
       window.open(material.pdf_url, '_blank')
       toast.success('Download started!')
     } catch (error) {
+      console.error('Download error:', error)
       toast.error('Failed to download')
     }
   }
@@ -238,10 +294,28 @@ export default function Home() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {featuredMaterials.map((material) => (
                 <div key={material.id} className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-violet-500/10 transition-all duration-500 border border-gray-100 hover:border-violet-200 card-hover">
-                  <div className={`relative h-48 bg-gradient-to-br ${getSubjectColor(material.subject)} p-6`}>
-                    <div className="absolute inset-0 bg-black/10"></div>
-                    <div className="relative flex justify-between items-start">
-                      <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${getSubjectBg(material.subject)}`}>
+                  <div className="relative h-48 overflow-hidden">
+                    {/* Thumbnail Image */}
+                    {material.thumbnail_url ? (
+                      <img
+                        src={material.thumbnail_url}
+                        alt={material.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${getSubjectColor(material.subject)}`}>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <BookOpen className="w-16 h-16 text-white/30" />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Overlay gradient for better text visibility */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                    
+                    {/* Badges */}
+                    <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
+                      <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-sm ${getSubjectBg(material.subject)}`}>
                         {material.subject}
                       </span>
                       {material.is_free ? (
@@ -254,9 +328,15 @@ export default function Home() {
                         </span>
                       )}
                     </div>
-                    <div className="absolute bottom-6 left-6">
-                      <BookOpen className="w-16 h-16 text-white/30" />
-                    </div>
+                    
+                    {/* Class badge at bottom */}
+                    {material.class && (
+                      <div className="absolute bottom-4 left-4 z-10">
+                        <span className="px-3 py-1.5 bg-white/90 backdrop-blur-sm text-gray-900 rounded-lg text-xs font-bold shadow-lg">
+                          {material.class}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-6">

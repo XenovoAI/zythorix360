@@ -46,6 +46,28 @@ export default function AdminPanel() {
     checkAdmin()
     loadMaterials()
     loadStats()
+
+    // Set up real-time subscriptions for live updates
+    const materialsSubscription = supabase
+      .channel('materials-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
+        loadMaterials()
+        loadStats()
+      })
+      .subscribe()
+
+    const downloadsSubscription = supabase
+      .channel('downloads-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_downloads' }, () => {
+        loadStats()
+      })
+      .subscribe()
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      materialsSubscription.unsubscribe()
+      downloadsSubscription.unsubscribe()
+    }
   }, [])
 
   const checkAdmin = async () => {
@@ -60,9 +82,12 @@ export default function AdminPanel() {
         return
       }
 
-      // Check if user is admin
-      if (session.user.user_metadata?.role !== 'admin') {
-        toast.error('Access denied. Admin only.')
+      // Check if user email is in admin list
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'abhi@zythorix360.com').split(',').map(e => e.trim().toLowerCase())
+      const userEmail = session.user.email?.toLowerCase()
+      
+      if (!adminEmails.includes(userEmail)) {
+        toast.error(`Access denied. Only admin emails can access this panel.`)
         router.push('/')
         return
       }
@@ -169,9 +194,15 @@ export default function AdminPanel() {
     
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
 
-    if (error) throw error
+    if (error) {
+      console.error('Upload error:', error)
+      throw error
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
@@ -222,24 +253,43 @@ export default function AdminPanel() {
         updated_at: new Date().toISOString()
       }
 
-      if (editingMaterial) {
-        // Update existing material
-        const { error } = await supabase
-          .from('materials')
-          .update(materialData)
-          .eq('id', editingMaterial.id)
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Session expired. Please login again.')
+        router.push('/login')
+        return
+      }
 
-        if (error) throw error
+      if (editingMaterial) {
+        // Update existing material via API
+        const response = await fetch('/api/admin/materials', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ id: editingMaterial.id, ...materialData })
+        })
+
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Failed to update')
         toast.success('Material updated successfully!')
       } else {
-        // Create new material
+        // Create new material via API
         materialData.created_at = new Date().toISOString()
         
-        const { error } = await supabase
-          .from('materials')
-          .insert([materialData])
+        const response = await fetch('/api/admin/materials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(materialData)
+        })
 
-        if (error) throw error
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Failed to create')
         toast.success('Material added successfully!')
       }
 
@@ -284,12 +334,21 @@ export default function AdminPanel() {
     if (!confirm(`Are you sure you want to delete "${material.title}"?`)) return
 
     try {
-      const { error } = await supabase
-        .from('materials')
-        .delete()
-        .eq('id', material.id)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Session expired. Please login again.')
+        return
+      }
 
-      if (error) throw error
+      const response = await fetch(`/api/admin/materials?id=${material.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Failed to delete')
 
       toast.success('Material deleted successfully!')
       loadMaterials()

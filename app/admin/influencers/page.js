@@ -32,6 +32,27 @@ export default function AdminInfluencersPage() {
 
   useEffect(() => {
     checkAdmin()
+
+    // Set up real-time subscriptions for live updates
+    const influencersSubscription = supabase
+      .channel('influencers-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'influencers' }, () => {
+        loadInfluencers()
+      })
+      .subscribe()
+
+    const ordersSubscription = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'influencer_orders' }, () => {
+        loadInfluencers()
+      })
+      .subscribe()
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      influencersSubscription.unsubscribe()
+      ordersSubscription.unsubscribe()
+    }
   }, [])
 
   const checkAdmin = async () => {
@@ -46,8 +67,12 @@ export default function AdminInfluencersPage() {
         return
       }
 
-      if (session.user.user_metadata?.role !== 'admin') {
-        toast.error('Access denied. Admin only.')
+      // Check if user email is in admin list
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'abhi@zythorix360.com').split(',').map(e => e.trim().toLowerCase())
+      const userEmail = session.user.email?.toLowerCase()
+      
+      if (!adminEmails.includes(userEmail)) {
+        toast.error(`Access denied. Only admin emails can access this panel.`)
         router.push('/')
         return
       }

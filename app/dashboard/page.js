@@ -28,27 +28,52 @@ export default function DashboardPage() {
     }
     if (user) {
       loadUserData()
+
+      // Set up real-time subscription for downloads
+      const downloadsSubscription = supabase
+        .channel('user-downloads')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'material_downloads',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          loadUserData()
+        })
+        .subscribe()
+
+      // Cleanup subscription
+      return () => {
+        downloadsSubscription.unsubscribe()
+      }
     }
   }, [user, authLoading, router])
 
   const loadUserData = async () => {
     try {
-      // Load download history
-      const { data: downloadData } = await supabase
-        .from('download_history')
+      // Load download history from material_downloads table
+      const { data: downloadData, error: downloadError } = await supabase
+        .from('material_downloads')
         .select('*, materials(*)')
         .eq('user_id', user.id)
         .order('downloaded_at', { ascending: false })
-        .limit(5)
+
+      if (downloadError) {
+        console.error('Download error:', downloadError)
+      }
       
       setDownloads(downloadData || [])
 
       // Load purchases
-      const { data: purchaseData } = await supabase
+      const { data: purchaseData, error: purchaseError } = await supabase
         .from('purchases')
         .select('*, materials(*)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+
+      if (purchaseError) {
+        console.error('Purchase error:', purchaseError)
+      }
       
       setPurchases(purchaseData || [])
     } catch (error) {
@@ -72,8 +97,12 @@ export default function DashboardPage() {
   const stats = [
     { label: 'Materials Downloaded', value: downloads.length, icon: Download, color: 'from-violet-500 to-purple-600' },
     { label: 'Purchases', value: purchases.length, icon: FileText, color: 'from-blue-500 to-cyan-600' },
-    { label: 'Study Hours', value: '24+', icon: Clock, color: 'from-green-500 to-emerald-600' },
-    { label: 'Progress', value: '65%', icon: TrendingUp, color: 'from-orange-500 to-pink-600' }
+    { label: 'Total Materials', value: downloads.length + purchases.length, icon: BookOpen, color: 'from-green-500 to-emerald-600' },
+    { label: 'This Month', value: downloads.filter(d => {
+      const downloadDate = new Date(d.downloaded_at)
+      const now = new Date()
+      return downloadDate.getMonth() === now.getMonth() && downloadDate.getFullYear() === now.getFullYear()
+    }).length, icon: TrendingUp, color: 'from-orange-500 to-pink-600' }
   ]
 
   return (
@@ -126,20 +155,50 @@ export default function DashboardPage() {
 
               {downloads.length > 0 ? (
                 <div className="space-y-4">
-                  {downloads.map((item, i) => (
+                  {downloads.slice(0, 5).map((item, i) => (
                     <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-6 h-6 text-white" />
+                      {/* Thumbnail */}
+                      <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                        {item.materials?.thumbnail_url ? (
+                          <img
+                            src={item.materials.thumbnail_url}
+                            alt={item.materials.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-white" />
+                          </div>
+                        )}
                       </div>
+                      
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-gray-900 truncate">
-                          {item.materials?.title || 'Material'}
+                          {item.materials?.title || item.material_title || 'Material'}
                         </h3>
                         <p className="text-sm text-gray-500">
-                          {item.materials?.subject} • Downloaded {new Date(item.downloaded_at).toLocaleDateString()}
+                          {item.materials?.subject} • {item.materials?.class}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Downloaded {new Date(item.downloaded_at).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
                         </p>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-violet-600">
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                        onClick={() => {
+                          if (item.materials?.pdf_url) {
+                            window.open(item.materials.pdf_url, '_blank')
+                            toast.success('Opening PDF...')
+                          }
+                        }}
+                      >
                         <Download className="w-4 h-4" />
                       </Button>
                     </div>

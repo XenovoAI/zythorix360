@@ -11,7 +11,7 @@ import AuthModal from '@/components/AuthModal'
 import { Button } from '@/components/ui/button'
 import { 
   Search, Download, BookOpen, Filter, Star, TrendingUp, 
-  X, Grid, List, SlidersHorizontal, ChevronDown
+  X, Grid, List, SlidersHorizontal, ChevronDown, ShoppingCart
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -79,21 +79,71 @@ export default function MaterialsPage() {
     setFilteredMaterials(filtered)
   }
 
+  const handlePurchase = async (material) => {
+    if (!user) {
+      setShowAuthModal(true)
+      return
+    }
+
+    toast.info('Payment integration coming soon! This material will be ₹' + material.price)
+    // TODO: Integrate Razorpay payment
+  }
+
   const handleDownload = async (material) => {
     if (!user) {
       setShowAuthModal(true)
       return
     }
     
-    if (!material.is_free && !material.purchased) {
-      toast.error('Please purchase this material first')
-      return
+    // Check if material needs to be purchased
+    if (!material.is_free) {
+      // Check if user has purchased this material
+      const { data: purchase } = await supabase
+        .from('purchases')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('material_id', material.id)
+        .single()
+
+      if (!purchase) {
+        toast.error('Please purchase this material first')
+        return
+      }
     }
     
     try {
+      // Track download
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const response = await fetch('/api/materials/download', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            materialId: material.id,
+            userId: user.id
+          })
+        })
+
+        const result = await response.json()
+        if (response.ok && result.isNewDownload) {
+          // Update local state with new download count
+          setMaterials(prev => 
+            prev.map(m => m.id === material.id 
+              ? { ...m, downloads: result.downloadCount }
+              : m
+            )
+          )
+        }
+      }
+
+      // Open PDF
       window.open(material.pdf_url, '_blank')
       toast.success('Download started!')
     } catch (error) {
+      console.error('Download error:', error)
       toast.error('Failed to download')
     }
   }
@@ -219,6 +269,8 @@ export default function MaterialsPage() {
                   material={material} 
                   viewMode={viewMode}
                   onDownload={handleDownload}
+                  onPurchase={handlePurchase}
+                  user={user}
                   getSubjectColor={getSubjectColor}
                   getSubjectBg={getSubjectBg}
                 />
@@ -239,12 +291,50 @@ export default function MaterialsPage() {
   )
 }
 
-function MaterialCard({ material, viewMode, onDownload, getSubjectColor, getSubjectBg }) {
+function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSubjectColor, getSubjectBg }) {
+  const [hasPurchased, setHasPurchased] = useState(material.is_free)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    if (!material.is_free && user) {
+      checkPurchase()
+    }
+  }, [material.id, user])
+
+  const checkPurchase = async () => {
+    if (!user) return
+    setChecking(true)
+    try {
+      const { data } = await supabase
+        .from('purchases')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('material_id', material.id)
+        .single()
+      
+      setHasPurchased(!!data)
+    } catch (error) {
+      setHasPurchased(false)
+    } finally {
+      setChecking(false)
+    }
+  }
+
   if (viewMode === 'list') {
     return (
       <div className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-violet-200 hover:shadow-xl transition-all duration-300 flex gap-6">
-        <div className={`w-32 h-32 rounded-2xl bg-gradient-to-br ${getSubjectColor(material.subject)} flex-shrink-0 flex items-center justify-center`}>
-          <BookOpen className="w-12 h-12 text-white/50" />
+        <div className="w-32 h-32 rounded-2xl overflow-hidden flex-shrink-0 relative">
+          {material.thumbnail_url ? (
+            <img
+              src={material.thumbnail_url}
+              alt={material.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className={`w-full h-full bg-gradient-to-br ${getSubjectColor(material.subject)} flex items-center justify-center`}>
+              <BookOpen className="w-12 h-12 text-white/50" />
+            </div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4 mb-2">
@@ -263,14 +353,30 @@ function MaterialCard({ material, viewMode, onDownload, getSubjectColor, getSubj
             </div>
             <div className="flex items-center gap-3">
               {material.is_free ? (
-                <span className="px-3 py-1 bg-green-100 text-green-600 rounded-lg text-sm font-bold">FREE</span>
+                <>
+                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-lg text-sm font-bold">FREE</span>
+                  <Button onClick={() => onDownload(material)} className="bg-violet-600 hover:bg-violet-700 rounded-xl">
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                </>
+              ) : hasPurchased ? (
+                <>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-sm font-bold">PURCHASED</span>
+                  <Button onClick={() => onDownload(material)} className="bg-violet-600 hover:bg-violet-700 rounded-xl">
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                </>
               ) : (
-                <span className="text-lg font-bold text-gray-900">₹{material.price}</span>
+                <>
+                  <span className="text-lg font-bold text-gray-900">₹{material.price}</span>
+                  <Button onClick={() => onPurchase(material)} className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl">
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Buy Now
+                  </Button>
+                </>
               )}
-              <Button onClick={() => onDownload(material)} className="bg-violet-600 hover:bg-violet-700 rounded-xl">
-                <Download className="w-4 h-4 mr-2" />
-                Download
-              </Button>
             </div>
           </div>
         </div>
@@ -280,10 +386,28 @@ function MaterialCard({ material, viewMode, onDownload, getSubjectColor, getSubj
 
   return (
     <div className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-violet-500/10 transition-all duration-500 border border-gray-100 hover:border-violet-200 card-hover">
-      <div className={`relative h-48 bg-gradient-to-br ${getSubjectColor(material.subject)} p-6`}>
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="relative flex justify-between items-start">
-          <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${getSubjectBg(material.subject)}`}>
+      <div className="relative h-48 overflow-hidden">
+        {/* Thumbnail Image */}
+        {material.thumbnail_url ? (
+          <img
+            src={material.thumbnail_url}
+            alt={material.title}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${getSubjectColor(material.subject)}`}>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <BookOpen className="w-16 h-16 text-white/30" />
+            </div>
+          </div>
+        )}
+        
+        {/* Overlay gradient for better text visibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+        
+        {/* Badges */}
+        <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
+          <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-sm ${getSubjectBg(material.subject)}`}>
             {material.subject}
           </span>
           {material.is_free ? (
@@ -292,9 +416,15 @@ function MaterialCard({ material, viewMode, onDownload, getSubjectColor, getSubj
             <span className="px-4 py-1.5 bg-white/90 text-gray-900 rounded-xl text-sm font-bold shadow-lg">₹{material.price}</span>
           )}
         </div>
-        <div className="absolute bottom-6 left-6">
-          <BookOpen className="w-16 h-16 text-white/30" />
-        </div>
+        
+        {/* Class badge at bottom */}
+        {material.class && (
+          <div className="absolute bottom-4 left-4 z-10">
+            <span className="px-3 py-1.5 bg-white/90 backdrop-blur-sm text-gray-900 rounded-lg text-xs font-bold shadow-lg">
+              {material.class}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="p-6">
@@ -314,13 +444,31 @@ function MaterialCard({ material, viewMode, onDownload, getSubjectColor, getSubj
           </div>
         </div>
 
-        <Button
-          onClick={() => onDownload(material)}
-          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Download Now
-        </Button>
+        {material.is_free ? (
+          <Button
+            onClick={() => onDownload(material)}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Now
+          </Button>
+        ) : hasPurchased ? (
+          <Button
+            onClick={() => onDownload(material)}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Now
+          </Button>
+        ) : (
+          <Button
+            onClick={() => onPurchase(material)}
+            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300"
+          >
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            Buy for ₹{material.price}
+          </Button>
+        )}
       </div>
     </div>
   )
