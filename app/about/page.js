@@ -185,9 +185,9 @@ export default function AboutPage() {
                   </Button>
                 </Link>
                 <Link href="/contact">
-                  <Button size="lg" variant="outline" className="border-2 border-white/30 text-white hover:bg-white/10 px-8 py-6 text-lg font-semibold rounded-2xl">
+                  <button style={{backgroundColor: 'transparent', color: 'white'}} className="w-full sm:w-auto border-2 border-white/30 hover:bg-white/10 px-6 py-3 text-base font-semibold rounded-xl transition-all duration-300 inline-flex items-center justify-center">
                     Contact Us
-                  </Button>
+                  </button>
                 </Link>
               </div>
             </div>

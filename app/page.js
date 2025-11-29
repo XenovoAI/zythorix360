@@ -174,14 +174,14 @@ export default function Home() {
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link href="/materials">
-                  <Button size="lg" className="w-full sm:w-auto bg-white text-violet-700 hover:bg-gray-100 px-8 py-6 text-lg font-semibold rounded-2xl shadow-2xl shadow-black/20 hover:shadow-white/20 transition-all duration-300 group">
-                    <BookOpen className="mr-2 w-5 h-5" />
+                  <Button className="w-full sm:w-auto bg-white text-violet-700 hover:bg-gray-100 px-6 py-3 text-base font-semibold rounded-xl shadow-lg transition-all duration-300 group">
+                    <BookOpen className="mr-2 w-4 h-4" />
                     Explore Materials
-                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <button className="w-full sm:w-auto border-2 border-white/50 text-white hover:bg-white hover:text-violet-700 px-8 py-4 text-lg font-semibold rounded-2xl backdrop-blur-sm transition-all duration-300">
+                  <button style={{backgroundColor: 'transparent', color: 'white'}} className="w-full sm:w-auto border-2 border-white hover:bg-white hover:text-violet-700 px-6 py-3 text-base font-semibold rounded-xl backdrop-blur-sm transition-all duration-300 inline-flex items-center justify-center">
                     Start Free Trial
                   </button>
                 </Link>
@@ -458,13 +458,13 @@ export default function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/materials">
-                  <Button size="lg" className="w-full sm:w-auto bg-white text-violet-700 hover:bg-gray-100 px-8 py-6 text-lg font-semibold rounded-2xl shadow-2xl">
-                    <BookOpen className="mr-2 w-5 h-5" />
+                  <Button className="w-full sm:w-auto bg-white text-violet-700 hover:bg-gray-100 px-6 py-3 text-base font-semibold rounded-xl shadow-lg">
+                    <BookOpen className="mr-2 w-4 h-4" />
                     Browse Materials
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <button className="w-full sm:w-auto border-2 border-white/50 text-white hover:bg-white hover:text-violet-700 px-8 py-4 text-lg font-semibold rounded-2xl transition-all duration-300">
+                  <button style={{backgroundColor: 'transparent', color: 'white'}} className="w-full sm:w-auto border-2 border-white hover:bg-white hover:text-violet-700 px-6 py-3 text-base font-semibold rounded-xl transition-all duration-300 inline-flex items-center justify-center">
                     Create Free Account
                   </button>
                 </Link>
