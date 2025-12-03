@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
@@ -17,6 +18,7 @@ import AuthModal from './components/AuthModal'
 import { toast } from 'sonner'
 
 export default function Home() {
+  const router = useRouter()
   const [featuredMaterials, setFeaturedMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -50,8 +52,95 @@ export default function Home() {
       return
     }
 
-    toast.info('Payment integration coming soon! This material will be ₹' + material.price)
-    // TODO: Integrate Razorpay payment
+    try {
+      toast.loading('Initiating payment...')
+
+      // Create Razorpay order
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          materialId: material.id,
+          userId: user.id
+        })
+      })
+
+      const orderData = await response.json()
+      if (!response.ok) throw new Error(orderData.error)
+
+      // Load Razorpay script
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      document.body.appendChild(script)
+
+      script.onload = () => {
+        const options = {
+          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'Zythorix360',
+          description: material.title,
+          order_id: orderData.orderId,
+          handler: async function (response) {
+            try {
+              toast.loading('Verifying payment...')
+              
+              // Verify payment
+              const verifyResponse = await fetch('/api/payment/verify', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  materialId: material.id,
+                  userId: user.id
+                })
+              })
+
+              const verifyData = await verifyResponse.json()
+              if (!verifyResponse.ok) throw new Error(verifyData.error)
+
+              toast.success('🎉 Payment successful! Redirecting to dashboard...')
+              
+              // Redirect to dashboard after 1.5 seconds
+              setTimeout(() => {
+                router.push('/dashboard')
+              }, 1500)
+            } catch (error) {
+              console.error('Verification error:', error)
+              toast.error('Payment verification failed. Please contact support.')
+            }
+          },
+          prefill: {
+            email: user.email,
+            contact: user.phone || ''
+          },
+          theme: {
+            color: '#7c3aed'
+          },
+          modal: {
+            ondismiss: function() {
+              toast.error('Payment cancelled')
+            }
+          }
+        }
+
+        const razorpay = new window.Razorpay(options)
+        razorpay.open()
+      }
+    } catch (error) {
+      console.error('Purchase error:', error)
+      toast.error(error.message || 'Failed to initiate payment')
+    }
   }
 
   const handleDownload = async (material) => {

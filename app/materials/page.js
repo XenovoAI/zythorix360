@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner'
 
 export default function MaterialsPage() {
+  const router = useRouter()
   const [materials, setMaterials] = useState([])
   const [filteredMaterials, setFilteredMaterials] = useState([])
   const [loading, setLoading] = useState(true)
@@ -85,8 +86,95 @@ export default function MaterialsPage() {
       return
     }
 
-    toast.info('Payment integration coming soon! This material will be ₹' + material.price)
-    // TODO: Integrate Razorpay payment
+    try {
+      toast.loading('Initiating payment...')
+
+      // Create Razorpay order
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          materialId: material.id,
+          userId: user.id
+        })
+      })
+
+      const orderData = await response.json()
+      if (!response.ok) throw new Error(orderData.error)
+
+      // Load Razorpay script
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      document.body.appendChild(script)
+
+      script.onload = () => {
+        const options = {
+          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'Zythorix360',
+          description: material.title,
+          order_id: orderData.orderId,
+          handler: async function (response) {
+            try {
+              toast.loading('Verifying payment...')
+              
+              // Verify payment
+              const verifyResponse = await fetch('/api/payment/verify', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  materialId: material.id,
+                  userId: user.id
+                })
+              })
+
+              const verifyData = await verifyResponse.json()
+              if (!verifyResponse.ok) throw new Error(verifyData.error)
+
+              toast.success('🎉 Payment successful! Redirecting to dashboard...')
+              
+              // Redirect to dashboard after 1.5 seconds
+              setTimeout(() => {
+                router.push('/dashboard')
+              }, 1500)
+            } catch (error) {
+              console.error('Verification error:', error)
+              toast.error('Payment verification failed. Please contact support.')
+            }
+          },
+          prefill: {
+            email: user.email,
+            contact: user.phone || ''
+          },
+          theme: {
+            color: '#7c3aed'
+          },
+          modal: {
+            ondismiss: function() {
+              toast.error('Payment cancelled')
+            }
+          }
+        }
+
+        const razorpay = new window.Razorpay(options)
+        razorpay.open()
+      }
+    } catch (error) {
+      console.error('Purchase error:', error)
+      toast.error(error.message || 'Failed to initiate payment')
+    }
   }
 
   const handleDownload = async (material) => {
@@ -98,14 +186,21 @@ export default function MaterialsPage() {
     // Check if material needs to be purchased
     if (!material.is_free) {
       // Check if user has purchased this material
-      const { data: purchase } = await supabase
-        .from('purchases')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('material_id', material.id)
-        .single()
+      try {
+        const { data: purchase, error } = await supabase
+          .from('purchases')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('material_id', material.id)
+          .maybeSingle()
 
-      if (!purchase) {
+        // If error or no purchase, show purchase button
+        if (error || !purchase) {
+          toast.error('Please purchase this material first')
+          return
+        }
+      } catch (err) {
+        // If RLS blocks, assume not purchased
         toast.error('Please purchase this material first')
         return
       }
@@ -305,15 +400,17 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
     if (!user) return
     setChecking(true)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('purchases')
         .select('id')
         .eq('user_id', user.id)
         .eq('material_id', material.id)
-        .single()
+        .maybeSingle()
       
-      setHasPurchased(!!data)
+      // If no error and data exists, user has purchased
+      setHasPurchased(!error && !!data)
     } catch (error) {
+      // If RLS blocks or any error, assume not purchased
       setHasPurchased(false)
     } finally {
       setChecking(false)

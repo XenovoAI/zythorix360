@@ -24,11 +24,7 @@ export default function AboutPage() {
     { value: '50+', label: 'Expert Educators' }
   ]
 
-  const team = [
-    { name: 'Expert Educators', role: 'IIT & AIIMS Alumni', desc: 'Our content is created by toppers who understand what it takes to succeed' },
-    { name: 'Subject Specialists', role: 'PhD Holders', desc: 'Deep expertise in Physics, Chemistry, Biology, and Mathematics' },
-    { name: 'Tech Team', role: 'Engineers', desc: 'Building the best learning platform for students' }
-  ]
+
 
   return (
     <div className="min-h-screen bg-white">
@@ -135,32 +131,58 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Team Section */}
+      {/* Founder Section */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="inline-block px-4 py-2 bg-violet-100 text-violet-700 rounded-full text-sm font-semibold mb-4">
-              Our Team
+              Leadership
             </span>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Meet the Experts
+              Meet Our Founder
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Our team of educators and experts are dedicated to your success
+              Driven by passion to make quality education accessible to all
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {team.map((member, i) => (
-              <div key={i} className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-xl hover:border-violet-200 transition-all duration-300">
-                <div className="w-16 h-16 mb-6 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                  <Users className="w-8 h-8 text-white" />
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-3xl p-8 lg:p-12 shadow-lg border border-gray-100 hover:shadow-2xl hover:border-violet-200 transition-all duration-300">
+              <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start">
+                {/* Profile Image Placeholder */}
+                <div className="flex-shrink-0">
+                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl">
+                    <span className="text-5xl lg:text-6xl font-bold text-white">AS</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-1">{member.name}</h3>
-                <p className="text-violet-600 font-medium mb-4">{member.role}</p>
-                <p className="text-gray-600">{member.desc}</p>
+
+                {/* Content */}
+                <div className="flex-1 text-center lg:text-left">
+                  <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Abhi Singh</h3>
+                  <p className="text-violet-600 font-semibold text-lg mb-4">Founder & CEO</p>
+                  
+                  <p className="text-gray-600 leading-relaxed mb-4">
+                    Abhi Singh founded Zythorix360 with a vision to democratize quality education for NEET and JEE aspirants across India. With a deep understanding of the challenges students face in competitive exam preparation, he built a platform that combines expert content with modern technology.
+                  </p>
+                  
+                  <p className="text-gray-600 leading-relaxed mb-6">
+                    Under his leadership, Zythorix360 has helped thousands of students achieve their dreams of becoming doctors and engineers, making quality study materials accessible and affordable for everyone.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+                    <span className="px-4 py-2 bg-violet-100 text-violet-700 rounded-full text-sm font-semibold">
+                      Education Innovator
+                    </span>
+                    <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+                      Tech Entrepreneur
+                    </span>
+                    <span className="px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
+                      Student Advocate
+                    </span>
+                  </div>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </section>
