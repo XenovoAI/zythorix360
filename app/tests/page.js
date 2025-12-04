@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { Button } from '@/components/ui/button'
-import { Clock, Award, Play, Target, BookOpen, Users, ChevronRight, Lock } from 'lucide-react'
+import { Clock, Award, Download, Target, BookOpen, Users, ChevronRight, Lock, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function TestsPage() {
@@ -43,13 +43,55 @@ export default function TestsPage() {
     ? tests 
     : tests.filter(t => t.category === selectedCategory || t.subject === selectedCategory)
 
-  const handleStartTest = (test) => {
+  const handleDownloadTest = async (test) => {
     if (!user) {
-      toast.error('Please login to take tests')
+      toast.error('Please login to download tests')
       router.push('/login')
       return
     }
-    router.push(`/tests/${test.id}`)
+
+    if (!test.is_free) {
+      // Check if user has purchased this test
+      const { data: purchase } = await supabase
+        .from('purchases')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('material_id', test.id)
+        .single()
+
+      if (!purchase) {
+        toast.error('Please purchase this test to download')
+        return
+      }
+    }
+
+    try {
+      // Track download
+      await supabase.from('test_downloads').insert({
+        user_id: user.id,
+        user_email: user.email,
+        test_id: test.id,
+        test_title: test.title,
+        test_type: test.is_free ? 'free' : 'paid'
+      })
+
+      // Increment download count
+      await supabase
+        .from('tests')
+        .update({ downloads: (test.downloads || 0) + 1 })
+        .eq('id', test.id)
+
+      // Download PDF
+      if (test.pdf_url) {
+        window.open(test.pdf_url, '_blank')
+        toast.success('Download started!')
+      } else {
+        toast.error('PDF not available')
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      toast.error('Failed to download test')
+    }
   }
 
   const getDifficultyColor = (difficulty) => {
@@ -61,19 +103,7 @@ export default function TestsPage() {
     return colors[difficulty] || 'bg-gray-100 text-gray-600'
   }
 
-  // Sample tests if none exist
-  const sampleTests = [
-    { id: 1, title: 'NEET Full Mock Test 1', category: 'NEET', duration: 180, questions: 180, difficulty: 'Medium', attempts: 1250 },
-    { id: 2, title: 'JEE Main Practice Test', category: 'JEE', duration: 180, questions: 90, difficulty: 'Medium', attempts: 980 },
-    { id: 3, title: 'Physics Chapter Test - Mechanics', category: 'Physics', duration: 60, questions: 30, difficulty: 'Easy', attempts: 2100 },
-    { id: 4, title: 'Chemistry - Organic Reactions', category: 'Chemistry', duration: 45, questions: 25, difficulty: 'Hard', attempts: 1560 },
-    { id: 5, title: 'Biology - Human Physiology', category: 'Biology', duration: 60, questions: 40, difficulty: 'Medium', attempts: 1890 },
-    { id: 6, title: 'Mathematics - Calculus', category: 'Mathematics', duration: 90, questions: 35, difficulty: 'Hard', attempts: 1120 }
-  ]
-
-  const displayTests = tests.length > 0 ? filteredTests : sampleTests.filter(t => 
-    selectedCategory === 'All' || t.category === selectedCategory
-  )
+  const displayTests = filteredTests
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -180,19 +210,39 @@ export default function TestsPage() {
                       <BookOpen className="w-4 h-4" />
                       <span className="text-sm">{test.questions} Qs</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-500 col-span-2">
+                    <div className="flex items-center gap-2 text-gray-500">
                       <Users className="w-4 h-4" />
                       <span className="text-sm">{test.attempts?.toLocaleString() || 0} attempts</span>
                     </div>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm">{test.downloads?.toLocaleString() || 0} downloads</span>
+                    </div>
                   </div>
 
-                  <Button
-                    onClick={() => handleStartTest(test)}
-                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl"
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Start Test
-                  </Button>
+                  {test.is_free ? (
+                    <Button
+                      onClick={() => handleDownloadTest(test)}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Free
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-500">Price</span>
+                        <span className="text-xl font-bold text-gray-900">₹{test.price}</span>
+                      </div>
+                      <Button
+                        onClick={() => handleDownloadTest(test)}
+                        className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download PDF
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

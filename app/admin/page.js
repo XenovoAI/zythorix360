@@ -9,7 +9,8 @@ import Footer from '@/components/Footer'
 import { Button } from '@/components/ui/button'
 import { 
   Upload, Trash2, Edit, Plus, X, FileText, Image as ImageIcon, 
-  Users, Download, BookOpen, TrendingUp, Eye, BarChart3, Award 
+  Users, Download, BookOpen, TrendingUp, Eye, BarChart3, Award, 
+  Clock, Target, Brain
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -18,13 +19,17 @@ export default function AdminPanel() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [materials, setMaterials] = useState([])
+  const [tests, setTests] = useState([])
+  const [activeTab, setActiveTab] = useState('materials') // 'materials' or 'tests'
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingMaterial, setEditingMaterial] = useState(null)
+  const [editingTest, setEditingTest] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalDownloads: 0,
     totalMaterials: 0,
+    totalTests: 0,
     recentDownloads: 0
   })
   
@@ -39,12 +44,28 @@ export default function AdminPanel() {
     price: 0
   })
 
+  const [testFormData, setTestFormData] = useState({
+    title: '',
+    description: '',
+    category: 'NEET',
+    difficulty: 'Medium',
+    duration: 60,
+    questions: 30,
+    pdfFile: null,
+    thumbnailFile: null,
+    is_free: true,
+    price: 0
+  })
+
   const subjects = ['Physics', 'Chemistry', 'Biology', 'Mathematics']
   const classes = ['Class 10', 'Class 11', 'Class 12', 'Dropper']
+  const testCategories = ['NEET', 'JEE', 'Physics', 'Chemistry', 'Biology', 'Mathematics']
+  const difficulties = ['Easy', 'Medium', 'Hard']
 
   useEffect(() => {
     checkAdmin()
     loadMaterials()
+    loadTests()
     loadStats()
 
     // Set up real-time subscriptions for live updates
@@ -52,6 +73,14 @@ export default function AdminPanel() {
       .channel('materials-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
         loadMaterials()
+        loadStats()
+      })
+      .subscribe()
+
+    const testsSubscription = supabase
+      .channel('tests-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tests' }, () => {
+        loadTests()
         loadStats()
       })
       .subscribe()
@@ -66,6 +95,7 @@ export default function AdminPanel() {
     // Cleanup subscriptions on unmount
     return () => {
       materialsSubscription.unsubscribe()
+      testsSubscription.unsubscribe()
       downloadsSubscription.unsubscribe()
     }
   }, [])
@@ -115,6 +145,20 @@ export default function AdminPanel() {
     }
   }
 
+  const loadTests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tests')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setTests(data || [])
+    } catch (error) {
+      console.error('Error loading tests:', error)
+    }
+  }
+
   const loadStats = async () => {
     try {
       // Get total downloads sum from materials
@@ -127,6 +171,11 @@ export default function AdminPanel() {
       // Get total materials count
       const { count: materialsCount, error: materialsCountError } = await supabase
         .from('materials')
+        .select('*', { count: 'exact', head: true })
+
+      // Get total tests count
+      const { count: testsCount } = await supabase
+        .from('tests')
         .select('*', { count: 'exact', head: true })
 
       // Get recent downloads (last 7 days) - if material_downloads table exists
@@ -161,6 +210,7 @@ export default function AdminPanel() {
         totalUsers,
         totalDownloads,
         totalMaterials: materialsCount || 0,
+        totalTests: testsCount || 0,
         recentDownloads
       })
     } catch (error) {
@@ -182,10 +232,17 @@ export default function AdminPanel() {
       return
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [type === 'pdf' ? 'pdfFile' : 'thumbnailFile']: file
-    }))
+    if (activeTab === 'materials') {
+      setFormData(prev => ({
+        ...prev,
+        [type === 'pdf' ? 'pdfFile' : 'thumbnailFile']: file
+      }))
+    } else {
+      setTestFormData(prev => ({
+        ...prev,
+        [type === 'pdf' ? 'pdfFile' : 'thumbnailFile']: file
+      }))
+    }
   }
 
   const uploadFile = async (file, bucket, folder) => {
@@ -361,6 +418,7 @@ export default function AdminPanel() {
   const closeModal = () => {
     setShowAddModal(false)
     setEditingMaterial(null)
+    setEditingTest(null)
     setFormData({
       title: '',
       description: '',
@@ -371,6 +429,167 @@ export default function AdminPanel() {
       is_free: true,
       price: 0
     })
+    setTestFormData({
+      title: '',
+      description: '',
+      category: 'NEET',
+      difficulty: 'Medium',
+      duration: 60,
+      questions: 30,
+      pdfFile: null,
+      thumbnailFile: null,
+      is_free: true,
+      price: 0
+    })
+  }
+
+  // Test Management Functions
+  const handleTestSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (!testFormData.title || !testFormData.description) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    if (!editingTest && (!testFormData.pdfFile || !testFormData.thumbnailFile)) {
+      toast.error('Please upload both PDF and thumbnail')
+      return
+    }
+
+    setUploading(true)
+
+    try {
+      let pdfUrl = editingTest?.pdf_url
+      let thumbnailUrl = editingTest?.thumbnail_url
+
+      if (testFormData.pdfFile) {
+        pdfUrl = await uploadFile(testFormData.pdfFile, 'materials-pdfs', 'tests')
+      }
+
+      if (testFormData.thumbnailFile) {
+        thumbnailUrl = await uploadFile(testFormData.thumbnailFile, 'materials-thumbnails', 'tests')
+      }
+
+      const testData = {
+        title: testFormData.title,
+        description: testFormData.description,
+        category: testFormData.category,
+        difficulty: testFormData.difficulty,
+        duration: parseInt(testFormData.duration),
+        questions: parseInt(testFormData.questions),
+        pdf_url: pdfUrl,
+        thumbnail_url: thumbnailUrl,
+        is_free: testFormData.is_free,
+        price: testFormData.is_free ? 0 : parseFloat(testFormData.price) || 0,
+        attempts: editingTest?.attempts || 0,
+        downloads: editingTest?.downloads || 0,
+        updated_at: new Date().toISOString()
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Session expired. Please login again.')
+        router.push('/login')
+        return
+      }
+
+      if (editingTest) {
+        const response = await fetch('/api/admin/tests', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ id: editingTest.id, ...testData })
+        })
+
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Failed to update')
+        toast.success('Test updated successfully!')
+      } else {
+        testData.created_at = new Date().toISOString()
+        
+        const response = await fetch('/api/admin/tests', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(testData)
+        })
+
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Failed to create')
+        toast.success('Test added successfully!')
+      }
+
+      setTestFormData({
+        title: '',
+        description: '',
+        category: 'NEET',
+        difficulty: 'Medium',
+        duration: 60,
+        questions: 30,
+        pdfFile: null,
+        thumbnailFile: null,
+        is_free: true,
+        price: 0
+      })
+      setShowAddModal(false)
+      setEditingTest(null)
+      loadTests()
+    } catch (error) {
+      console.error('Error saving test:', error)
+      toast.error(error.message || 'Failed to save test')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleEditTest = (test) => {
+    setEditingTest(test)
+    setTestFormData({
+      title: test.title,
+      description: test.description,
+      category: test.category,
+      difficulty: test.difficulty,
+      duration: test.duration,
+      questions: test.questions,
+      pdfFile: null,
+      thumbnailFile: null,
+      is_free: test.is_free !== undefined ? test.is_free : true,
+      price: test.price || 0
+    })
+    setShowAddModal(true)
+  }
+
+  const handleDeleteTest = async (test) => {
+    if (!confirm(`Are you sure you want to delete "${test.title}"?`)) return
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Session expired. Please login again.')
+        return
+      }
+
+      const response = await fetch(`/api/admin/tests?id=${test.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Failed to delete')
+
+      toast.success('Test deleted successfully!')
+      loadTests()
+    } catch (error) {
+      console.error('Error deleting test:', error)
+      toast.error('Failed to delete test')
+    }
   }
 
   if (loading) {
@@ -462,26 +681,84 @@ export default function AdminPanel() {
                 <p className="text-sm text-gray-600">Manage affiliates & track sales</p>
               </div>
             </a>
+            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <BookOpen className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Total Materials</h3>
+                <p className="text-2xl font-bold text-blue-600">{stats.totalMaterials}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-100">
+              <div className="p-3 bg-orange-100 rounded-lg">
+                <Target className="w-6 h-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Total Tests</h3>
+                <p className="text-2xl font-bold text-orange-600">{stats.totalTests}</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Materials Section Header */}
+        {/* Tabs for Materials and Tests */}
+        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('materials')}
+              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                activeTab === 'materials'
+                  ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <BookOpen className="w-5 h-5 inline mr-2" />
+              Study Materials ({stats.totalMaterials})
+            </button>
+            <button
+              onClick={() => setActiveTab('tests')}
+              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                activeTab === 'tests'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Target className="w-5 h-5 inline mr-2" />
+              Tests ({stats.totalTests})
+            </button>
+          </div>
+        </div>
+
+        {/* Section Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Study Materials</h2>
-            <p className="text-gray-600 text-sm">Manage and organize all materials</p>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {activeTab === 'materials' ? 'Study Materials' : 'Tests'}
+            </h2>
+            <p className="text-gray-600 text-sm">
+              {activeTab === 'materials' ? 'Manage and organize all materials' : 'Manage and organize all tests'}
+            </p>
           </div>
           <Button
-            onClick={() => setShowAddModal(true)}
-            className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl flex items-center gap-2 w-full sm:w-auto transition-all"
+            onClick={() => {
+              setEditingMaterial(null)
+              setEditingTest(null)
+              setShowAddModal(true)
+            }}
+            className={`${
+              activeTab === 'materials'
+                ? 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700'
+                : 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700'
+            } text-white shadow-lg hover:shadow-xl flex items-center gap-2 w-full sm:w-auto transition-all`}
           >
             <Plus className="w-4 h-4" />
-            Add Material
+            {activeTab === 'materials' ? 'Add Material' : 'Add Test'}
           </Button>
         </div>
 
-        {/* Materials List - Unified Card View */}
-        {materials.length === 0 ? (
+        {/* Materials/Tests List - Unified Card View */}
+        {activeTab === 'materials' && materials.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
             <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No materials yet</h3>
@@ -494,7 +771,20 @@ export default function AdminPanel() {
               Add First Material
             </Button>
           </div>
-        ) : (
+        ) : activeTab === 'tests' && tests.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No tests yet</h3>
+            <p className="text-gray-600 mb-6">Get started by adding your first test</p>
+            <Button
+              onClick={() => setShowAddModal(true)}
+              className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add First Test
+            </Button>
+          </div>
+        ) : activeTab === 'materials' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {materials.map((material) => (
               <div key={material.id} className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100">
@@ -575,6 +865,108 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            {tests.map((test) => (
+              <div key={test.id} className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100">
+                {/* Thumbnail */}
+                <div className="relative h-48 bg-gradient-to-br from-orange-100 to-red-200 overflow-hidden">
+                  {test.thumbnail_url ? (
+                    <img
+                      src={test.thumbnail_url}
+                      alt={test.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Brain className="w-16 h-16 text-orange-300" />
+                    </div>
+                  )}
+                  
+                  {/* Category badge */}
+                  <div className="absolute top-3 left-3">
+                    <span className="px-3 py-1.5 bg-white/90 backdrop-blur-sm text-orange-600 rounded-lg text-xs font-bold shadow-md">
+                      {test.category}
+                    </span>
+                  </div>
+
+                  {/* Difficulty badge */}
+                  <div className="absolute top-14 left-3">
+                    <span className={`px-3 py-1.5 backdrop-blur-sm rounded-lg text-xs font-bold shadow-md ${
+                      test.difficulty === 'Easy' ? 'bg-green-500/90 text-white' :
+                      test.difficulty === 'Hard' ? 'bg-red-500/90 text-white' :
+                      'bg-yellow-500/90 text-white'
+                    }`}>
+                      {test.difficulty}
+                    </span>
+                  </div>
+                  
+                  {/* Downloads badge */}
+                  <div className="absolute top-3 right-3">
+                    <span className="px-3 py-1.5 bg-white/90 backdrop-blur-sm text-gray-700 rounded-lg text-xs font-semibold shadow-md flex items-center gap-1">
+                      <Download className="w-3 h-3" />
+                      {test.downloads || 0}
+                    </span>
+                  </div>
+
+                  {/* Price/Free badge */}
+                  <div className="absolute bottom-3 right-3">
+                    {test.is_free ? (
+                      <span className="px-3 py-1.5 bg-green-500/90 backdrop-blur-sm text-white rounded-lg text-xs font-bold shadow-md">
+                        FREE
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 backdrop-blur-sm text-white rounded-lg text-xs font-bold shadow-md">
+                        ₹{test.price || 0}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4">
+                  <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2 group-hover:text-orange-600 transition-colors">
+                    {test.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    {test.description}
+                  </p>
+
+                  {/* Test Info */}
+                  <div className="grid grid-cols-2 gap-2 mb-4 text-xs text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {test.duration} mins
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      {test.questions} Qs
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEditTest(test)}
+                      className="flex-1 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDeleteTest(test)}
+                      className="flex-1 text-red-600 hover:bg-red-50 hover:border-red-300"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -586,7 +978,10 @@ export default function AdminPanel() {
               <div className="p-4 sm:p-6 sticky top-0 bg-white border-b z-10">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {editingMaterial ? 'Edit Material' : 'Add New Material'}
+                    {activeTab === 'materials' 
+                      ? (editingMaterial ? 'Edit Material' : 'Add New Material')
+                      : (editingTest ? 'Edit Test' : 'Add New Test')
+                    }
                   </h2>
                   <button onClick={closeModal} className="text-gray-500 hover:text-gray-700 p-1">
                     <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -594,6 +989,7 @@ export default function AdminPanel() {
                 </div>
               </div>
 
+              {activeTab === 'materials' ? (
               <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-6 pt-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
@@ -805,6 +1201,227 @@ export default function AdminPanel() {
                   </Button>
                 </div>
               </form>
+              ) : (
+              <form onSubmit={handleTestSubmit} className="space-y-4 p-4 sm:p-6 pt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <input
+                    type="text"
+                    value={testFormData.title}
+                    onChange={(e) => setTestFormData({ ...testFormData, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="e.g., NEET Full Mock Test 1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                  <textarea
+                    value={testFormData.description}
+                    onChange={(e) => setTestFormData({ ...testFormData, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    placeholder="Brief description of the test"
+                    rows="3"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                    <select
+                      value={testFormData.category}
+                      onChange={(e) => setTestFormData({ ...testFormData, category: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    >
+                      {testCategories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty *</label>
+                    <select
+                      value={testFormData.difficulty}
+                      onChange={(e) => setTestFormData({ ...testFormData, difficulty: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    >
+                      {difficulties.map((diff) => (
+                        <option key={diff} value={diff}>{diff}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Duration (mins) *</label>
+                    <input
+                      type="number"
+                      value={testFormData.duration}
+                      onChange={(e) => setTestFormData({ ...testFormData, duration: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      placeholder="60"
+                      min="1"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Questions *</label>
+                    <input
+                      type="number"
+                      value={testFormData.questions}
+                      onChange={(e) => setTestFormData({ ...testFormData, questions: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      placeholder="30"
+                      min="1"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Section */}
+                <div className="bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-200 rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Free Test</label>
+                      <p className="text-xs text-gray-500">Toggle to make this test free or paid</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTestFormData({ ...testFormData, is_free: !testFormData.is_free, price: !testFormData.is_free ? 0 : testFormData.price })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        testFormData.is_free ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          testFormData.is_free ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {!testFormData.is_free && (
+                    <div className="animate-in slide-in-from-top">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹) *</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₹</span>
+                        <input
+                          type="number"
+                          value={testFormData.price}
+                          onChange={(e) => setTestFormData({ ...testFormData, price: e.target.value })}
+                          className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 font-semibold text-gray-900"
+                          placeholder="0"
+                          min="0"
+                          step="1"
+                          required={!testFormData.is_free}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    PDF File {!editingTest && '*'}
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleFileChange(e, 'pdf')}
+                      className="hidden"
+                      id="test-pdf-upload"
+                    />
+                    <label htmlFor="test-pdf-upload" className="cursor-pointer">
+                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">
+                        {testFormData.pdfFile ? testFormData.pdfFile.name : 'Click to upload PDF'}
+                      </p>
+                      {editingTest && !testFormData.pdfFile && (
+                        <p className="text-xs text-gray-500 mt-1">Leave empty to keep current PDF</p>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Thumbnail Image {!editingTest && '*'}
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'thumbnail')}
+                      className="hidden"
+                      id="test-thumbnail-upload"
+                    />
+                    <label htmlFor="test-thumbnail-upload" className="cursor-pointer">
+                      {testFormData.thumbnailFile ? (
+                        <div>
+                          <img
+                            src={URL.createObjectURL(testFormData.thumbnailFile)}
+                            alt="Preview"
+                            className="w-32 h-40 object-cover rounded mx-auto mb-2"
+                          />
+                          <p className="text-sm text-gray-600">{testFormData.thumbnailFile.name}</p>
+                        </div>
+                      ) : editingTest?.thumbnail_url ? (
+                        <div>
+                          <img
+                            src={editingTest.thumbnail_url}
+                            alt="Current"
+                            className="w-32 h-40 object-cover rounded mx-auto mb-2"
+                          />
+                          <p className="text-sm text-gray-600">Click to change thumbnail</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">Click to upload thumbnail</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t sticky bottom-0 bg-white pb-4">
+                  <Button
+                    type="submit"
+                    disabled={uploading}
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 order-1 sm:order-1"
+                  >
+                    {uploading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Uploading...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        {editingTest ? 'Update Test' : 'Add Test'}
+                      </div>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={closeModal}
+                    disabled={uploading}
+                    className="flex-1 order-2 sm:order-2"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+              )}
             </div>
           </div>
         </div>
