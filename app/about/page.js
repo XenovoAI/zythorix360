@@ -151,11 +151,15 @@ export default function AboutPage() {
               <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start">
                 {/* Profile Image */}
                 <div className="flex-shrink-0">
-                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl overflow-hidden shadow-xl ring-4 ring-violet-100">
+                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl overflow-hidden shadow-xl ring-4 ring-violet-100 bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
                     <img 
                       src="/founder.jpg" 
                       alt="Abhi Singh - Founder & CEO" 
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                        e.target.parentElement.innerHTML = '<span class="text-5xl lg:text-6xl font-bold text-white">AS</span>'
+                      }}
                     />
                   </div>
                 </div>
