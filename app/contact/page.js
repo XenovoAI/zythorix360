@@ -36,7 +36,7 @@ export default function ContactPage() {
   }
 
   const contactInfo = [
-    { icon: Mail, label: 'Email', value: 'zythorix360@gmail.com', href: 'mailto:zythorix360@gmail.com' },
+    { icon: Mail, label: 'Email', value: 'abhi@zythorix360.com', href: 'mailto:abhi@zythorix360.com' },
     { icon: Phone, label: 'Phone', value: '+91 XXX XXX XXXX', href: 'tel:+91XXXXXXXXXX' },
     { icon: MapPin, label: 'Location', value: 'India', href: null },
     { icon: Clock, label: 'Response Time', value: 'Within 24 hours', href: null }
