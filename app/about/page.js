@@ -149,10 +149,14 @@ export default function AboutPage() {
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-3xl p-8 lg:p-12 shadow-lg border border-gray-100 hover:shadow-2xl hover:border-violet-200 transition-all duration-300">
               <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start">
-                {/* Profile Image Placeholder */}
+                {/* Profile Image */}
                 <div className="flex-shrink-0">
-                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl">
-                    <span className="text-5xl lg:text-6xl font-bold text-white">AS</span>
+                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl overflow-hidden shadow-xl ring-4 ring-violet-100">
+                    <img 
+                      src="/founder.jpg" 
+                      alt="Abhi Singh - Founder & CEO" 
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 </div>
 
