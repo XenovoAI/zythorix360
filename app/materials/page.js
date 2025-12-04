@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function MaterialsPage() {
+function MaterialsContent() {
   const router = useRouter()
   const [materials, setMaterials] = useState([])
   const [filteredMaterials, setFilteredMaterials] = useState([])
@@ -568,5 +568,18 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
         )}
       </div>
     </div>
+  )
+}
+
+
+export default function MaterialsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
+      </div>
+    }>
+      <MaterialsContent />
+    </Suspense>
   )
 }
