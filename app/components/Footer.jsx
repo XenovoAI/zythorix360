@@ -65,9 +65,9 @@ export default function Footer() {
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-violet-400 mt-0.5 flex-shrink-0" />
-                <span className="text-gray-400 hover:text-white transition-colors">
-                  zythorix360@gmail.com
-                </span>
+                <a href="mailto:abhi@zythorix360.com" className="text-gray-400 hover:text-white transition-colors">
+                  abhi@zythorix360.com
+                </a>
               </li>
               <li className="flex items-start gap-3">
                 <Phone className="w-5 h-5 text-violet-400 mt-0.5 flex-shrink-0" />
