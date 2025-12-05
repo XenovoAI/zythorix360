@@ -147,6 +147,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support, email zythorix360@gmail.com or visit our website at [www.zythorix360.com](https://www.zythorix360.com).
 
+## Credits
+
+**Made by [@XenovoAI](https://github.com/XenovoAI)**
+
 ## Acknowledgments
 
 - Built with ❤️ for students preparing for NEET & JEE
