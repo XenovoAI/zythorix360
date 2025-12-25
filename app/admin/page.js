@@ -38,6 +38,7 @@ export default function AdminPanel() {
     description: '',
     subject: 'Physics',
     class: 'Class 11',
+    link_type: 'notes',
     pdfFile: null,
     thumbnailFile: null,
     is_free: true,
@@ -59,6 +60,18 @@ export default function AdminPanel() {
 
   const subjects = ['Physics', 'Chemistry', 'Biology', 'Mathematics']
   const classes = ['Class 10', 'Class 11', 'Class 12', 'Dropper']
+  const linkTypes = [
+    { value: 'notes', label: 'Notes' },
+    { value: 'question-bank', label: 'Question Bank' },
+    { value: 'practice-papers', label: 'Practice Papers' },
+    { value: 'revision', label: 'Revision Material' },
+    { value: 'formula-sheet', label: 'Formula Sheet' },
+    { value: 'concept-map', label: 'Concept Map' },
+    { value: 'video-notes', label: 'Video Notes' },
+    { value: 'solved-examples', label: 'Solved Examples' },
+    { value: 'previous-year', label: 'Previous Year Papers' },
+    { value: 'mock-test', label: 'Mock Test' }
+  ]
   const testCategories = ['NEET', 'JEE', 'Physics', 'Chemistry', 'Biology', 'Mathematics']
   const difficulties = ['Easy', 'Medium', 'Hard']
 
@@ -302,6 +315,7 @@ export default function AdminPanel() {
         description: formData.description,
         subject: formData.subject,
         class: formData.class,
+        link_type: formData.link_type,
         pdf_url: pdfUrl,
         thumbnail_url: thumbnailUrl,
         downloads: editingMaterial?.downloads || 0,
@@ -356,6 +370,7 @@ export default function AdminPanel() {
         description: '',
         subject: 'Physics',
         class: 'Class 11',
+        link_type: 'notes',
         pdfFile: null,
         thumbnailFile: null,
         is_free: true,
@@ -379,6 +394,7 @@ export default function AdminPanel() {
       description: material.description,
       subject: material.subject,
       class: material.class || 'Class 11',
+      link_type: material.link_type || 'notes',
       pdfFile: null,
       thumbnailFile: null,
       is_free: material.is_free !== undefined ? material.is_free : true,
@@ -424,6 +440,7 @@ export default function AdminPanel() {
       description: '',
       subject: 'Physics',
       class: 'Class 11',
+      link_type: 'notes',
       pdfFile: null,
       thumbnailFile: null,
       is_free: true,
@@ -810,6 +827,15 @@ export default function AdminPanel() {
                       {material.subject}
                     </span>
                   </div>
+
+                  {/* Link Type badge */}
+                  {material.link_type && (
+                    <div className={`absolute ${material.class ? 'top-[6.5rem]' : 'top-14'} left-3`}>
+                      <span className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-lg text-xs font-bold shadow-md">
+                        {linkTypes.find(t => t.value === material.link_type)?.label || material.link_type}
+                      </span>
+                    </div>
+                  )}
                   
                   {/* Downloads badge */}
                   <div className="absolute top-3 right-3">
@@ -1041,6 +1067,21 @@ export default function AdminPanel() {
                       <option key={classItem} value={classItem}>{classItem}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Material Type (Link Type) *</label>
+                  <select
+                    value={formData.link_type}
+                    onChange={(e) => setFormData({ ...formData, link_type: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    required
+                  >
+                    {linkTypes.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Select the type of material for system categorization</p>
                 </div>
 
                 {/* Pricing Section */}

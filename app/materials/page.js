@@ -390,6 +390,19 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
   const [hasPurchased, setHasPurchased] = useState(material.is_free)
   const [checking, setChecking] = useState(false)
 
+  const linkTypes = [
+    { value: 'notes', label: 'Notes' },
+    { value: 'question-bank', label: 'Question Bank' },
+    { value: 'practice-papers', label: 'Practice Papers' },
+    { value: 'revision', label: 'Revision Material' },
+    { value: 'formula-sheet', label: 'Formula Sheet' },
+    { value: 'concept-map', label: 'Concept Map' },
+    { value: 'video-notes', label: 'Video Notes' },
+    { value: 'solved-examples', label: 'Solved Examples' },
+    { value: 'previous-year', label: 'Previous Year Papers' },
+    { value: 'mock-test', label: 'Mock Test' }
+  ]
+
   useEffect(() => {
     if (!material.is_free && user) {
       checkPurchase()
@@ -504,9 +517,16 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
         
         {/* Badges */}
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
-          <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-sm ${getSubjectBg(material.subject)}`}>
-            {material.subject}
-          </span>
+          <div className="flex flex-col gap-2">
+            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-sm ${getSubjectBg(material.subject)}`}>
+              {material.subject}
+            </span>
+            {material.link_type && (
+              <span className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg">
+                {linkTypes.find(t => t.value === material.link_type)?.label || material.link_type}
+              </span>
+            )}
+          </div>
           {material.is_free ? (
             <span className="px-4 py-1.5 bg-green-500 text-white rounded-xl text-xs font-bold shadow-lg">FREE</span>
           ) : (
