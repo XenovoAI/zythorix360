@@ -64,18 +64,27 @@ export default function DashboardPage() {
       
       setDownloads(downloadData || [])
 
-      // Load purchases
-      const { data: purchaseData, error: purchaseError } = await supabase
-        .from('purchases')
-        .select('*, materials(*)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      // Load purchases via API
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const response = await fetch('/api/purchases/my-purchases', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`
+          }
+        })
 
-      if (purchaseError) {
+        if (response.ok) {
+          const { purchases: purchaseData } = await response.json()
+          setPurchases(purchaseData || [])
+        } else {
+          console.error('Failed to load purchases')
+          setPurchases([])
+        }
+      } catch (purchaseError) {
         console.error('Purchase error:', purchaseError)
+        setPurchases([])
       }
-      
-      setPurchases(purchaseData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {

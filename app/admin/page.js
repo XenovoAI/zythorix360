@@ -42,7 +42,10 @@ export default function AdminPanel() {
     pdfFile: null,
     thumbnailFile: null,
     is_free: true,
-    price: 0
+    price: 0,
+    uploadType: 'file', // 'file' or 'gdrive'
+    gdriveLink: '',
+    gdriveThumbnail: ''
   })
 
   const [testFormData, setTestFormData] = useState({
@@ -126,7 +129,7 @@ export default function AdminPanel() {
       }
 
       // Check if user email is in admin list
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'abhi@zythorix360.com').split(',').map(e => e.trim().toLowerCase())
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'theetoxi@gmail.com,abhi@zythorix360.com').split(',').map(e => e.trim().toLowerCase())
       const userEmail = session.user.email?.toLowerCase()
       
       if (!adminEmails.includes(userEmail)) {
@@ -281,6 +284,33 @@ export default function AdminPanel() {
     return publicUrl
   }
 
+  // Convert Google Drive sharing link to direct download/view link
+  const convertGDriveLink = (link, isImage = false) => {
+    if (!link) return ''
+    
+    // Extract file ID from various Google Drive URL formats
+    let fileId = ''
+    
+    // Format: https://drive.google.com/file/d/FILE_ID/view
+    const match1 = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+    // Format: https://drive.google.com/open?id=FILE_ID
+    const match2 = link.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    // Format: https://drive.google.com/uc?id=FILE_ID
+    const match3 = link.match(/\/uc\?.*id=([a-zA-Z0-9_-]+)/)
+    
+    if (match1) fileId = match1[1]
+    else if (match2) fileId = match2[1]
+    else if (match3) fileId = match3[1]
+    else return link // Return original if can't parse
+    
+    if (isImage) {
+      // For images, use thumbnail endpoint
+      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`
+    }
+    // For PDFs, use direct download link
+    return `https://drive.google.com/uc?export=download&id=${fileId}`
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -289,9 +319,23 @@ export default function AdminPanel() {
       return
     }
 
-    if (!editingMaterial && (!formData.pdfFile || !formData.thumbnailFile)) {
-      toast.error('Please upload both PDF and thumbnail')
-      return
+    // Validation based on upload type
+    if (formData.uploadType === 'file') {
+      if (!editingMaterial && (!formData.pdfFile || !formData.thumbnailFile)) {
+        toast.error('Please upload both PDF and thumbnail')
+        return
+      }
+    } else {
+      // Google Drive validation
+      if (!editingMaterial && (!formData.gdriveLink || !formData.gdriveThumbnail)) {
+        toast.error('Please provide both Google Drive PDF link and thumbnail link')
+        return
+      }
+      // Validate Google Drive link format
+      if (formData.gdriveLink && !formData.gdriveLink.includes('drive.google.com')) {
+        toast.error('Please provide a valid Google Drive link')
+        return
+      }
     }
 
     setUploading(true)
@@ -300,14 +344,23 @@ export default function AdminPanel() {
       let pdfUrl = editingMaterial?.pdf_url
       let thumbnailUrl = editingMaterial?.thumbnail_url
 
-      // Upload new PDF if provided
-      if (formData.pdfFile) {
-        pdfUrl = await uploadFile(formData.pdfFile, 'materials-pdfs', formData.subject.toLowerCase())
-      }
-
-      // Upload new thumbnail if provided
-      if (formData.thumbnailFile) {
-        thumbnailUrl = await uploadFile(formData.thumbnailFile, 'materials-thumbnails', formData.subject.toLowerCase())
+      if (formData.uploadType === 'file') {
+        // Upload new PDF if provided
+        if (formData.pdfFile) {
+          pdfUrl = await uploadFile(formData.pdfFile, 'materials-pdfs', formData.subject.toLowerCase())
+        }
+        // Upload new thumbnail if provided
+        if (formData.thumbnailFile) {
+          thumbnailUrl = await uploadFile(formData.thumbnailFile, 'materials-thumbnails', formData.subject.toLowerCase())
+        }
+      } else {
+        // Use Google Drive links
+        if (formData.gdriveLink) {
+          pdfUrl = convertGDriveLink(formData.gdriveLink)
+        }
+        if (formData.gdriveThumbnail) {
+          thumbnailUrl = convertGDriveLink(formData.gdriveThumbnail, true)
+        }
       }
 
       const materialData = {
@@ -374,7 +427,10 @@ export default function AdminPanel() {
         pdfFile: null,
         thumbnailFile: null,
         is_free: true,
-        price: 0
+        price: 0,
+        uploadType: 'file',
+        gdriveLink: '',
+        gdriveThumbnail: ''
       })
       setShowAddModal(false)
       setEditingMaterial(null)
@@ -398,7 +454,10 @@ export default function AdminPanel() {
       pdfFile: null,
       thumbnailFile: null,
       is_free: material.is_free !== undefined ? material.is_free : true,
-      price: material.price || 0
+      price: material.price || 0,
+      uploadType: 'file',
+      gdriveLink: '',
+      gdriveThumbnail: ''
     })
     setShowAddModal(true)
   }
@@ -444,7 +503,10 @@ export default function AdminPanel() {
       pdfFile: null,
       thumbnailFile: null,
       is_free: true,
-      price: 0
+      price: 0,
+      uploadType: 'file',
+      gdriveLink: '',
+      gdriveThumbnail: ''
     })
     setTestFormData({
       title: '',
@@ -1148,70 +1210,143 @@ export default function AdminPanel() {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    PDF File {!editingMaterial && '*'}
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => handleFileChange(e, 'pdf')}
-                      className="hidden"
-                      id="pdf-upload"
-                    />
-                    <label htmlFor="pdf-upload" className="cursor-pointer">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">
-                        {formData.pdfFile ? formData.pdfFile.name : 'Click to upload PDF'}
-                      </p>
-                      {editingMaterial && !formData.pdfFile && (
-                        <p className="text-xs text-gray-500 mt-1">Leave empty to keep current PDF</p>
-                      )}
-                    </label>
+                {/* Upload Type Toggle */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Upload Method</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, uploadType: 'file' })}
+                      className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                        formData.uploadType === 'file'
+                          ? 'bg-sky-600 text-white shadow-md'
+                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Upload className="w-4 h-4 inline mr-2" />
+                      File Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, uploadType: 'gdrive' })}
+                      className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                        formData.uploadType === 'gdrive'
+                          ? 'bg-green-600 text-white shadow-md'
+                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 inline mr-2" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0L1.75 17.5h4.5L12 7.5l5.75 10H22L12 0zm0 10.5L7.5 19h9l-4.5-8.5z"/>
+                      </svg>
+                      Google Drive
+                    </button>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Thumbnail Image {!editingMaterial && '*'}
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileChange(e, 'thumbnail')}
-                      className="hidden"
-                      id="thumbnail-upload"
-                    />
-                    <label htmlFor="thumbnail-upload" className="cursor-pointer">
-                      {formData.thumbnailFile ? (
-                        <div>
-                          <img
-                            src={URL.createObjectURL(formData.thumbnailFile)}
-                            alt="Preview"
-                            className="w-32 h-40 object-cover rounded mx-auto mb-2"
-                          />
-                          <p className="text-sm text-gray-600">{formData.thumbnailFile.name}</p>
-                        </div>
-                      ) : editingMaterial?.thumbnail_url ? (
-                        <div>
-                          <img
-                            src={editingMaterial.thumbnail_url}
-                            alt="Current"
-                            className="w-32 h-40 object-cover rounded mx-auto mb-2"
-                          />
-                          <p className="text-sm text-gray-600">Click to change thumbnail</p>
-                        </div>
-                      ) : (
-                        <div>
-                          <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">Click to upload thumbnail</p>
-                        </div>
-                      )}
-                    </label>
-                  </div>
-                </div>
+                {formData.uploadType === 'file' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        PDF File {!editingMaterial && '*'}
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-sky-400 transition-colors">
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          onChange={(e) => handleFileChange(e, 'pdf')}
+                          className="hidden"
+                          id="pdf-upload"
+                        />
+                        <label htmlFor="pdf-upload" className="cursor-pointer">
+                          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            {formData.pdfFile ? formData.pdfFile.name : 'Click to upload PDF'}
+                          </p>
+                          {editingMaterial && !formData.pdfFile && (
+                            <p className="text-xs text-gray-500 mt-1">Leave empty to keep current</p>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Thumbnail Image {!editingMaterial && '*'}
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-sky-400 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, 'thumbnail')}
+                          className="hidden"
+                          id="thumbnail-upload"
+                        />
+                        <label htmlFor="thumbnail-upload" className="cursor-pointer">
+                          {formData.thumbnailFile ? (
+                            <div>
+                              <img
+                                src={URL.createObjectURL(formData.thumbnailFile)}
+                                alt="Preview"
+                                className="w-24 h-32 object-cover rounded mx-auto mb-2"
+                              />
+                              <p className="text-sm text-gray-600">{formData.thumbnailFile.name}</p>
+                            </div>
+                          ) : editingMaterial?.thumbnail_url ? (
+                            <div>
+                              <img
+                                src={editingMaterial.thumbnail_url}
+                                alt="Current"
+                                className="w-24 h-32 object-cover rounded mx-auto mb-2"
+                              />
+                              <p className="text-sm text-gray-600">Click to change</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <ImageIcon className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                              <p className="text-sm text-gray-600">Click to upload thumbnail</p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Google Drive PDF Link {!editingMaterial && '*'}
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.gdriveLink}
+                        onChange={(e) => setFormData({ ...formData, gdriveLink: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="https://drive.google.com/file/d/..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Paste the Google Drive sharing link for the PDF</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Google Drive Thumbnail Link {!editingMaterial && '*'}
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.gdriveThumbnail}
+                        onChange={(e) => setFormData({ ...formData, gdriveThumbnail: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="https://drive.google.com/file/d/..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Paste the Google Drive sharing link for the thumbnail image</p>
+                    </div>
+
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-xs text-green-700">
+                        <strong>Tip:</strong> Make sure your Google Drive files are set to "Anyone with the link can view"
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t sticky bottom-0 bg-white pb-4">
                   <Button

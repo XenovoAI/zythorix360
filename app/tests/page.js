@@ -52,14 +52,28 @@ export default function TestsPage() {
 
     if (!test.is_free) {
       // Check if user has purchased this test
-      const { data: purchase } = await supabase
-        .from('purchases')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('material_id', test.id)
-        .single()
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const response = await fetch('/api/purchases/check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({
+            materialId: test.id,
+            userId: user.id
+          })
+        })
 
-      if (!purchase) {
+        const { hasPurchased } = await response.json()
+        
+        if (!hasPurchased) {
+          toast.error('Please purchase this test to download')
+          return
+        }
+      } catch (err) {
+        console.error('Purchase check error:', err)
         toast.error('Please purchase this test to download')
         return
       }

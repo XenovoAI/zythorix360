@@ -67,19 +67,36 @@ export async function POST(request) {
     // Receipt must be max 40 chars, so use timestamp + random
     const receipt = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
     
-    const order = await razorpay.orders.create({
-      amount: material.price * 100, // Amount in paise
-      currency: 'INR',
-      receipt: receipt,
-      notes: {
-        materialId: material.id,
-        materialTitle: material.title,
-        userId: user.id,
-        userEmail: user.email,
-      },
-    })
-
-    console.log('Order created successfully:', order.id)
+    let order
+    try {
+      order = await razorpay.orders.create({
+        amount: material.price * 100, // Amount in paise
+        currency: 'INR',
+        receipt: receipt,
+        notes: {
+          materialId: material.id,
+          materialTitle: material.title,
+          userId: user.id,
+          userEmail: user.email,
+        },
+      })
+      console.log('Order created successfully:', order.id)
+    } catch (razorpayError) {
+      console.error('Razorpay API error:', razorpayError)
+      console.error('Razorpay error details:', {
+        message: razorpayError.message,
+        statusCode: razorpayError.statusCode,
+        error: razorpayError.error,
+        description: razorpayError.error?.description
+      })
+      
+      // Return detailed error for debugging
+      return NextResponse.json({ 
+        error: 'Payment gateway error. Please check your Razorpay credentials.',
+        details: razorpayError.error?.description || razorpayError.message,
+        statusCode: razorpayError.statusCode
+      }, { status: 500 })
+    }
 
     return NextResponse.json({
       orderId: order.id,

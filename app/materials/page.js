@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import Navbar from '@/components/Navbar'
@@ -11,7 +12,7 @@ import AuthModal from '@/components/AuthModal'
 import { Button } from '@/components/ui/button'
 import { 
   Search, Download, BookOpen, Filter, Star, TrendingUp, 
-  X, Grid, List, SlidersHorizontal, ChevronDown, ShoppingCart
+  X, Grid, List, SlidersHorizontal, ChevronDown, ShoppingCart, ExternalLink
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -185,22 +186,29 @@ function MaterialsContent() {
     
     // Check if material needs to be purchased
     if (!material.is_free) {
-      // Check if user has purchased this material
+      // Check if user has purchased this material via API
       try {
-        const { data: purchase, error } = await supabase
-          .from('purchases')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('material_id', material.id)
-          .maybeSingle()
+        const { data: { session } } = await supabase.auth.getSession()
+        const response = await fetch('/api/purchases/check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({
+            materialId: material.id,
+            userId: user.id
+          })
+        })
 
-        // If error or no purchase, show purchase button
-        if (error || !purchase) {
+        const { hasPurchased } = await response.json()
+        
+        if (!hasPurchased) {
           toast.error('Please purchase this material first')
           return
         }
       } catch (err) {
-        // If RLS blocks, assume not purchased
+        console.error('Purchase check error:', err)
         toast.error('Please purchase this material first')
         return
       }
@@ -413,17 +421,23 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
     if (!user) return
     setChecking(true)
     try {
-      const { data, error } = await supabase
-        .from('purchases')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('material_id', material.id)
-        .maybeSingle()
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/purchases/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          materialId: material.id,
+          userId: user.id
+        })
+      })
       
-      // If no error and data exists, user has purchased
-      setHasPurchased(!error && !!data)
+      const { hasPurchased } = await response.json()
+      setHasPurchased(hasPurchased)
     } catch (error) {
-      // If RLS blocks or any error, assume not purchased
+      console.error('Purchase check error:', error)
       setHasPurchased(false)
     } finally {
       setChecking(false)
@@ -545,9 +559,11 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
       </div>
 
       <div className="p-6">
-        <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2 group-hover:text-violet-600 transition-colors">
-          {material.title}
-        </h3>
+        <Link href={`/materials/${material.id}`}>
+          <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2 group-hover:text-violet-600 transition-colors cursor-pointer">
+            {material.title}
+          </h3>
+        </Link>
         <p className="text-sm text-gray-500 mb-4 line-clamp-2">{material.description}</p>
 
         <div className="flex items-center justify-between mb-4">
@@ -562,29 +578,50 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
         </div>
 
         {material.is_free ? (
-          <Button
-            onClick={() => onDownload(material)}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download Now
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onDownload(material)}
+              className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download
+            </Button>
+            <Link href={`/materials/${material.id}`}>
+              <Button variant="outline" className="border-violet-200 hover:bg-violet-50 rounded-xl py-3 px-3">
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
         ) : hasPurchased ? (
-          <Button
-            onClick={() => onDownload(material)}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download Now
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onDownload(material)}
+              className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download
+            </Button>
+            <Link href={`/materials/${material.id}`}>
+              <Button variant="outline" className="border-violet-200 hover:bg-violet-50 rounded-xl py-3 px-3">
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
         ) : (
-          <Button
-            onClick={() => onPurchase(material)}
-            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300"
-          >
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            Buy for ₹{material.price}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onPurchase(material)}
+              className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl py-3 font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300"
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              ₹{material.price}
+            </Button>
+            <Link href={`/materials/${material.id}`}>
+              <Button variant="outline" className="border-violet-200 hover:bg-violet-50 rounded-xl py-3 px-3">
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
         )}
       </div>
     </div>
