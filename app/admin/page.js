@@ -248,11 +248,17 @@ export default function AdminPanel() {
       return
     }
 
+    console.log('📁 File selected:', type, file.name)
+
     if (activeTab === 'materials') {
-      setFormData(prev => ({
-        ...prev,
-        [type === 'pdf' ? 'pdfFile' : 'thumbnailFile']: file
-      }))
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [type === 'pdf' ? 'pdfFile' : 'thumbnailFile']: file
+        }
+        console.log('📝 Updated formData:', type === 'pdf' ? 'pdfFile' : 'thumbnailFile', '=', file.name)
+        return updated
+      })
     } else {
       setTestFormData(prev => ({
         ...prev,
@@ -262,25 +268,57 @@ export default function AdminPanel() {
   }
 
   const uploadFile = async (file, bucket, folder) => {
-    const fileExt = file.name.split('.').pop()
+    console.log('📤 Upload starting:', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      bucket: bucket
+    })
+    
+    const fileExt = file.name.split('.').pop().toLowerCase()
     const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+    
+    // Determine content type - ALWAYS use extension-based for images
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+      'gif': 'image/gif'
+    }
+    
+    const contentType = mimeTypes[fileExt] || 'application/octet-stream'
+    
+    console.log('📦 Upload details:', {
+      fileName: fileName,
+      contentType: contentType,
+      fileExt: fileExt
+    })
+    
+    // Create a new Blob with the correct content type
+    const blob = new Blob([file], { type: contentType })
     
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file, {
+      .upload(fileName, blob, {
         cacheControl: '3600',
-        upsert: false
+        upsert: false,
+        contentType: contentType
       })
 
     if (error) {
-      console.error('Upload error:', error)
+      console.error('❌ Upload error:', error)
       throw error
     }
+
+    console.log('✅ Upload successful:', data)
 
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
       .getPublicUrl(fileName)
 
+    console.log('🔗 Public URL:', publicUrl)
     return publicUrl
   }
 
@@ -344,14 +382,23 @@ export default function AdminPanel() {
       let pdfUrl = editingMaterial?.pdf_url
       let thumbnailUrl = editingMaterial?.thumbnail_url
 
+      console.log('🔍 Edit mode:', !!editingMaterial)
+      console.log('🔍 Upload type:', formData.uploadType)
+      console.log('🔍 Has thumbnail file:', !!formData.thumbnailFile)
+      console.log('🔍 Current thumbnail URL:', thumbnailUrl)
+
       if (formData.uploadType === 'file') {
         // Upload new PDF if provided
         if (formData.pdfFile) {
+          console.log('📤 Uploading new PDF...')
           pdfUrl = await uploadFile(formData.pdfFile, 'materials-pdfs', formData.subject.toLowerCase())
+          console.log('✅ PDF uploaded:', pdfUrl)
         }
         // Upload new thumbnail if provided
         if (formData.thumbnailFile) {
+          console.log('📤 Uploading new thumbnail...')
           thumbnailUrl = await uploadFile(formData.thumbnailFile, 'materials-thumbnails', formData.subject.toLowerCase())
+          console.log('✅ Thumbnail uploaded:', thumbnailUrl)
         }
       } else {
         // Use Google Drive links
@@ -362,6 +409,8 @@ export default function AdminPanel() {
           thumbnailUrl = convertGDriveLink(formData.gdriveThumbnail, true)
         }
       }
+
+      console.log('📦 Final thumbnail URL to save:', thumbnailUrl)
 
       const materialData = {
         title: formData.title,
@@ -397,7 +446,14 @@ export default function AdminPanel() {
         })
 
         const result = await response.json()
-        if (!response.ok) throw new Error(result.error || 'Failed to update')
+        console.log('📡 Update response:', result)
+        
+        if (!response.ok) {
+          console.error('❌ Update failed:', result)
+          throw new Error(result.error || 'Failed to update')
+        }
+        
+        console.log('✅ Material updated in database:', result.material)
         toast.success('Material updated successfully!')
       } else {
         // Create new material via API

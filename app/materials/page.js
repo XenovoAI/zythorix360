@@ -52,7 +52,14 @@ function MaterialsContent() {
         .select('*')
         .order('created_at', { ascending: false })
       if (error) throw error
-      setMaterials(data || [])
+      
+      // Add cache-busting timestamp to all thumbnail URLs
+      const materialsWithFreshUrls = (data || []).map(material => ({
+        ...material,
+        thumbnail_url: material.thumbnail_url ? `${material.thumbnail_url}?v=${Date.now()}` : null
+      }))
+      
+      setMaterials(materialsWithFreshUrls)
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -397,6 +404,7 @@ function MaterialsContent() {
 function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSubjectColor, getSubjectBg }) {
   const [hasPurchased, setHasPurchased] = useState(material.is_free)
   const [checking, setChecking] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   const linkTypes = [
     { value: 'notes', label: 'Notes' },
@@ -447,12 +455,19 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
   if (viewMode === 'list') {
     return (
       <div className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-violet-200 hover:shadow-xl transition-all duration-300 flex gap-6">
-        <div className="w-32 h-32 rounded-2xl overflow-hidden flex-shrink-0 relative">
-          {material.thumbnail_url ? (
+        <div className="w-32 h-32 rounded-2xl overflow-hidden flex-shrink-0 relative bg-gray-100">
+          {material.thumbnail_url && !imageError ? (
             <img
+              key={`${material.id}-${material.updated_at}`}
               src={material.thumbnail_url}
               alt={material.title}
               className="w-full h-full object-cover"
+              style={{ display: 'block', minHeight: '100%', minWidth: '100%' }}
+              onError={() => {
+                console.error('❌ List view failed:', material.title)
+                setImageError(true)
+              }}
+              onLoad={() => console.log('✅ List view loaded:', material.title)}
             />
           ) : (
             <div className={`w-full h-full bg-gradient-to-br ${getSubjectColor(material.subject)} flex items-center justify-center`}>
@@ -510,13 +525,20 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
 
   return (
     <div className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-violet-500/10 transition-all duration-500 border border-gray-100 hover:border-violet-200 card-hover">
-      <div className="relative h-48 overflow-hidden">
+      <div className="relative h-48 overflow-hidden bg-gray-100">
         {/* Thumbnail Image */}
-        {material.thumbnail_url ? (
+        {material.thumbnail_url && !imageError ? (
           <img
+            key={`${material.id}-${material.updated_at}`}
             src={material.thumbnail_url}
             alt={material.title}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            style={{ display: 'block', minHeight: '100%', minWidth: '100%' }}
+            onError={() => {
+              console.error('❌ Failed to load:', material.title)
+              setImageError(true)
+            }}
+            onLoad={() => console.log('✅ Loaded:', material.title)}
           />
         ) : (
           <div className={`w-full h-full bg-gradient-to-br ${getSubjectColor(material.subject)}`}>
