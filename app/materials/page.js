@@ -151,12 +151,10 @@ function MaterialsContent() {
               const verifyData = await verifyResponse.json()
               if (!verifyResponse.ok) throw new Error(verifyData.error)
 
-              toast.success('🎉 Payment successful! Redirecting to dashboard...')
+              toast.success('🎉 Payment successful! Material unlocked!')
               
-              // Redirect to dashboard after 1.5 seconds
-              setTimeout(() => {
-                router.push('/dashboard')
-              }, 1500)
+              // Reload materials to update UI
+              loadMaterials()
             } catch (error) {
               console.error('Verification error:', error)
               toast.error('Payment verification failed. Please contact support.')
@@ -423,7 +421,7 @@ function MaterialCard({ material, viewMode, onDownload, onPurchase, user, getSub
     if (!material.is_free && user) {
       checkPurchase()
     }
-  }, [material.id, user])
+  }, [material.id, user, material.updated_at])
 
   const checkPurchase = async () => {
     if (!user) return

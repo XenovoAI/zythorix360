@@ -28,26 +28,8 @@ export default function DashboardPage() {
     }
     if (user) {
       loadUserData()
-
-      // Set up real-time subscription for downloads
-      const downloadsSubscription = supabase
-        .channel('user-downloads')
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'material_downloads',
-          filter: `user_id=eq.${user.id}`
-        }, () => {
-          loadUserData()
-        })
-        .subscribe()
-
-      // Cleanup subscription
-      return () => {
-        downloadsSubscription.unsubscribe()
-      }
     }
-  }, [user, authLoading, router])
+  }, [user?.id, authLoading])
 
   const loadUserData = async () => {
     try {
@@ -67,6 +49,8 @@ export default function DashboardPage() {
       // Load purchases via API
       try {
         const { data: { session } } = await supabase.auth.getSession()
+        console.log('📡 Fetching purchases for user:', user.id)
+        
         const response = await fetch('/api/purchases/my-purchases', {
           method: 'GET',
           headers: {
@@ -74,15 +58,19 @@ export default function DashboardPage() {
           }
         })
 
+        console.log('📡 Purchases response status:', response.status)
+        
         if (response.ok) {
           const { purchases: purchaseData } = await response.json()
+          console.log('✅ Purchases loaded:', purchaseData?.length || 0, purchaseData)
           setPurchases(purchaseData || [])
         } else {
-          console.error('Failed to load purchases')
+          const errorData = await response.json()
+          console.error('❌ Failed to load purchases:', errorData)
           setPurchases([])
         }
       } catch (purchaseError) {
-        console.error('Purchase error:', purchaseError)
+        console.error('❌ Purchase error:', purchaseError)
         setPurchases([])
       }
     } catch (error) {
@@ -153,6 +141,79 @@ export default function DashboardPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
+            {/* Recent Downloads */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">My Purchases</h2>
+                <Link href="/materials" className="text-violet-600 hover:text-violet-700 text-sm font-medium flex items-center gap-1">
+                  Browse More <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              {purchases.length > 0 ? (
+                <div className="space-y-4">
+                  {purchases.map((purchase, i) => (
+                    <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      {/* Thumbnail */}
+                      <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                        {purchase.materials?.thumbnail_url ? (
+                          <img
+                            src={purchase.materials.thumbnail_url}
+                            alt={purchase.materials.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">
+                          {purchase.materials?.title || 'Material'}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {purchase.materials?.subject} • {purchase.materials?.class}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Purchased {new Date(purchase.created_at).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })} • ₹{purchase.amount}
+                        </p>
+                      </div>
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                        onClick={() => {
+                          if (purchase.materials?.pdf_url) {
+                            window.open(purchase.materials.pdf_url, '_blank')
+                            toast.success('Opening PDF...')
+                          }
+                        }}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No purchases yet</p>
+                  <Link href="/materials">
+                    <Button className="bg-violet-600 hover:bg-violet-700">
+                      Browse Materials
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+
             {/* Recent Downloads */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-6">
