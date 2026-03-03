@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request) {
   console.log('=== Payment Create Order API Called ===')
-  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+  const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
   console.log('Razorpay configured:', !!razorpayKeyId)
   try {
     const body = await request.json()
