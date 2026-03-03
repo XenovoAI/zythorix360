@@ -76,7 +76,10 @@ export default function MaterialPage() {
         body: JSON.stringify({ materialId: material.id, userId: user.id })
       })
       const orderData = await response.json()
-      if (!response.ok) throw new Error(orderData.error)
+      if (!response.ok) {
+        const errorMessage = orderData.details ? `${orderData.error} (${orderData.details})` : orderData.error
+        throw new Error(errorMessage)
+      }
 
       const script = document.createElement('script')
       script.src = 'https://checkout.razorpay.com/v1/checkout.js'
@@ -84,7 +87,7 @@ export default function MaterialPage() {
       document.body.appendChild(script)
       script.onload = () => {
         new window.Razorpay({
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: orderData.amount,
           currency: orderData.currency,
           name: 'Zythorix360',

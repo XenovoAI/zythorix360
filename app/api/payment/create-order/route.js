@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request) {
   console.log('=== Payment Create Order API Called ===')
-  console.log('Razorpay configured:', !!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID)
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+  console.log('Razorpay configured:', !!razorpayKeyId)
   try {
     const body = await request.json()
     console.log('Request body:', body)
@@ -47,18 +48,18 @@ export async function POST(request) {
     }
 
     // Check if Razorpay keys are configured
-    if (!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    if (!razorpayKeyId || !process.env.RAZORPAY_KEY_SECRET) {
       console.error('Razorpay keys not configured')
       return NextResponse.json({ 
         error: 'Payment gateway not configured. Please contact support.' 
       }, { status: 500 })
     }
 
-    console.log('Initializing Razorpay with key:', process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID)
+    console.log('Initializing Razorpay with key prefix:', razorpayKeyId.substring(0, 12))
 
     // Initialize Razorpay
     const razorpay = new Razorpay({
-      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      key_id: razorpayKeyId,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     })
 
@@ -92,9 +93,14 @@ export async function POST(request) {
       })
       
       // Return detailed error for debugging
-      return NextResponse.json({ 
-        error: 'Payment gateway error. Please check your Razorpay credentials.',
-        details: razorpayError.error?.description || razorpayError.message,
+      const details = razorpayError.error?.description || razorpayError.message || 'Unknown Razorpay error'
+      const clientError = razorpayError.statusCode === 401
+        ? 'Razorpay authentication failed. Verify key ID/secret and ensure both are from the same mode (test or live).'
+        : 'Payment gateway error. Please check your Razorpay configuration.'
+
+      return NextResponse.json({
+        error: clientError,
+        details,
         statusCode: razorpayError.statusCode
       }, { status: 500 })
     }
@@ -103,6 +109,7 @@ export async function POST(request) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
+      keyId: razorpayKeyId,
       material: {
         id: material.id,
         title: material.title,

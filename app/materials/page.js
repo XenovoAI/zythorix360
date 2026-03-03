@@ -112,7 +112,10 @@ function MaterialsContent() {
       })
 
       const orderData = await response.json()
-      if (!response.ok) throw new Error(orderData.error)
+      if (!response.ok) {
+        const errorMessage = orderData.details ? `${orderData.error} (${orderData.details})` : orderData.error
+        throw new Error(errorMessage)
+      }
 
       // Load Razorpay script
       const script = document.createElement('script')
@@ -122,7 +125,7 @@ function MaterialsContent() {
 
       script.onload = () => {
         const options = {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: orderData.amount,
           currency: orderData.currency,
           name: 'Zythorix360',

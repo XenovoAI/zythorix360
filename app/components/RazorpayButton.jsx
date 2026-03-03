@@ -33,12 +33,13 @@ export default function RazorpayButton({ material, onSuccess, className }) {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create order')
+        const errorMessage = data.details ? `${data.error} (${data.details})` : (data.error || 'Failed to create order')
+        throw new Error(errorMessage)
       }
 
       // Initialize Razorpay
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: data.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: data.currency,
         name: 'Zythorix360',
